@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Adi’s Ultimate Memory Match</title>
+<style>
+  :root{
+    --bg1: #050816;
+    --bg2: #0b1220;
+    --panel: rgba(255,255,255,0.04);
+    --muted: #9ca3af;
+    --accent1: #38bdf8; /* cyan */
+    --accent2: #a855f7; /* purple */
+    --success: #4ade80;
+    --danger: #fb7185;
+    --card-radius: 14px;
+    --card-back: linear-gradient(135deg,#7c3aed,#06b6d4);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:
+      radial-gradient(800px 600px at 10% 10%, rgba(59,130,246,0.06), transparent 8%),
+      radial-gradient(600px 500px at 90% 90%, rgba(168,85,247,0.06), transparent 8%),
+      linear-gradient(180deg,var(--bg1),var(--bg2));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    color:#e6eef8;
+  }
+
+  /* watermark */
+  .watermark{
+    position:fixed;
+    right:14px;
+    bottom:10px;
+    font-size:12px;
+    color:rgba(230,238,248,0.22);
+    transform: rotate(-10deg);
+    pointer-events:none;
+    user-select:none;
+  }
+
+  /* container */
+  .wrap{
+    width:100%;
+    max-width:1100px;
+    display:grid;
+    grid-template-columns: 1fr 340px;
+    gap:20px;
+    align-items:start;
+  }
+  @media(max-width:980px){ .wrap{grid-template-columns:1fr} }
+
+  .panel{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:20px;
+    padding:18px;
+    border:1px solid rgba(255,255,255,0.04);
+    box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+  }
+
+  /* left: game board */
+  .board-panel{padding:22px;min-height:480px;display:flex;flex-direction:column;gap:12px}
+  .header{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+
+  /* Neon glow title */
+  .title{
+    font-size:22px;margin:0;display:flex;gap:10px;align-items:baseline;
+  }
+  .title .name{
+    font-weight:800;
+    font-size:28px;
+    background: linear-gradient(90deg, var(--accent1), var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:
+      0 0 10px rgba(56,189,248,0.12),
+      0 0 26px rgba(168,85,247,0.08),
+      0 6px 12px rgba(2,6,23,0.7);
+  }
+  .subtitle{font-size:13px;color:var(--muted)}
+
+  /* start overlay */
+  .start-overlay{
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    background: linear-gradient(180deg, rgba(2,6,23,0.6), rgba(2,6,23,0.55));
+    border-radius:20px;
+    z-index:40;
+    padding:22px;
+    text-align:center;
+  }
+  .start-card{
+    max-width:520px;
+    backdrop-filter: blur(6px);
+    padding:28px;border-radius:16px;
+    border:1px solid rgba(255,255,255,0.04);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  }
+  .neon-title{
+    font-size:36px;
+    line-height:1;
+    margin:0 0 10px 0;
+    text-shadow:
+      0 0 8px rgba(56,189,248,0.25),
+      0 0 18px rgba(168,85,247,0.18),
+      0 6px 16px rgba(2,6,23,0.8);
+    color:transparent;
+    background: linear-gradient(90deg,var(--accent1),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;
+    font-weight:800;
+  }
+  .start-sub{color:var(--muted);margin-bottom:18px}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:0;cursor:pointer;
+    font-weight:700;font-size:14px;
+  }
+  .btn-primary{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#031026;box-shadow:0 10px 24px rgba(56,189,248,0.12)}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+
+  /* game grid */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-top:6px;
+  }
+  @media(max-width:520px){
+    .grid{grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px}
+  }
+
+  .card{
+    position:relative;
+    aspect-ratio: 3/4;
+    perspective:1000px;
+    cursor:pointer;
+  }
+  .card-inner{
+    position:absolute;inset:0;border-radius:var(--card-radius);
+    transform-style:preserve-3d;
+    transition: transform 0.52s cubic-bezier(.2,9,3,1), box-shadow 0.18s;
+  }
+  .card:hover .card-inner{ transform: translateY(-6px) rotateY(0deg); box-shadow:0 18px 36px rgba(2,6,23,0.7) }
+  .card.flipped .card-inner{ transform: rotateY(180deg); }
+  .card.matched .card-inner{ transform: rotateY(180deg) scale(1.03); box-shadow:0 30px 60px rgba(0,0,0,0.65) }
+
+  .face{
+    position:absolute;inset:0;border-radius:var(--card-radius);
+    display:flex;align-items:center;justify-content:center;
+    backface-visibility:hidden; font-size:34px; font-weight:700;
+  }
+  .face.back{
+    background: var(--card-back);
+    color:#021124;
+    transform: rotateY(0deg);
+    border:1px solid rgba(255,255,255,0.06);
+    box-shadow: inset 0 -8px 40px rgba(2,6,23,0.25);
+  }
+  .face.front{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    transform: rotateY(180deg);
+    color:var(--accent1);
+    border:1px solid rgba(255,255,255,0.02);
+    font-size:30px;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* matched pulse */
+  .pulse {
+    position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    box-shadow: 0 0 0 0 rgba(74,222,128,0.0);
+    animation: pulse 900ms ease-out forwards;
+    z-index:1;
+  }
+  @keyframes pulse{
+    0%{ box-shadow: 0 0 0 0 rgba(74,222,128,0.45); transform: scale(1); opacity:1 }
+    100%{ box-shadow: 0 0 0 28px rgba(74,222,128,0.0); transform: scale(1.06); opacity:0 }
+  }
+
+  /* right panel: stats & controls */
+  .side{
+    display:flex;flex-direction:column;gap:12px;
+    position:relative;
+  }
+  .stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em}
+  .stat .val{font-size:20px;font-weight:800}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .muted{color:var(--muted);font-size:13px}
+  .footer-note{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* NEW: mode pill buttons (4x4 / 6x6) */
+  .mode-group button {
+    padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.06);
+    background:transparent;color:var(--muted);cursor:pointer;font-weight:800;transition: all 160ms ease;
+  }
+  .mode-group button:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(56,189,248,0.06); }
+  .mode-group button.active {
+    background: linear-gradient(90deg,var(--accent1),var(--accent2));
+    color:#021026; box-shadow: 0 12px 36px rgba(56,189,248,0.12); transform: translateY(-2px);
+  }
+  .mode-group button:focus { outline: 3px solid rgba(56,189,248,0.12); }
+
+  /* NEW: Stop/resume button styling placed with header controls */
+  .controls-row { display:flex; gap:8px; align-items:center; }
+  .stop-btn {
+    padding:8px 12px; border-radius:12px; border:0; cursor:pointer;
+    background: linear-gradient(90deg,#fb7185,#f97316); color:#051020; font-weight:800;
+    box-shadow: 0 10px 28px rgba(251,113,133,0.08);
+  }
+  .stop-btn.paused {
+    background: linear-gradient(90deg,#94a3b8,#64748b); color:#e6eef8;
+    box-shadow: none;
+  }
+
+  /* victory overlay */
+  .win-overlay{
+    position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg, rgba(2,6,23,0.6), rgba(2,6,23,0.5));
+    border-radius:20px;z-index:45;padding:22px;text-align:center;
+  }
+  .confetti {
+    position:absolute;inset:0;pointer-events:none;z-index:50;
+  }
+  .best-badge{background:linear-gradient(90deg,var(--accent1),var(--accent2));padding:6px 10px;border-radius:999px;color:#00131b;font-weight:800;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="watermark">Made by Adi</div>
+
+  <div class="wrap">
+    <!-- left: board -->
+    <div class="panel board-panel" id="gamePanel" style="position:relative;">
+      <!-- start overlay (hidden once started) -->
+      <div class="start-overlay" id="startOverlay" aria-hidden="false">
+        <div class="start-card" role="dialog" aria-label="Start Adi's Ultimate Memory Match">
+          <h2 class="neon-title">Adi’s Ultimate Memory Match</h2>
+          <p class="start-sub">Flip cards, find pairs — challenge your memory. Neon vibes, smooth animations, and sounds included. Ready?</p>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <button class="btn btn-primary" id="startBtn">Start Game</button>
+            <button class="btn btn-ghost" id="howBtn">How to play</button>
+          </div>
+          <p class="subtitle" style="margin-top:12px">Tip: Press <strong>N</strong> to focus new game quickly.</p>
+        </div>
+      </div>
+
+      <!-- win overlay (hidden) -->
+      <div class="win-overlay" id="winOverlay" style="display:none;align-items:center;justify-content:center;">
+        <div style="max-width:520px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:22px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+          <h2 style="margin:0 0 8px 0;font-size:28px">You won! 🎉</h2>
+          <div class="muted" id="winStats">Time: 00:00 • Moves: 0</div>
+          <div style="height:12px"></div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-primary" id="playAgainBtn">Play Again</button>
+            <button class="btn btn-ghost" id="closeWinBtn">Close</button>
+          </div>
+          <div style="height:12px"></div>
+          <div style="display:flex;justify-content:center"><div class="best-badge" id="bestBadge" style="display:none">New Best!</div></div>
+        </div>
+      </div>
+
+      <div class="header">
+        <div>
+          <div class="title"><span class="name">Adi’s</span> Ultimate Memory Match</div>
+          <div class="subtitle">Find all matching pairs as quick as you can.</div>
+        </div>
+
+        <!-- controls row: Shuffle | Reset | Stop | Mute -->
+        <div style="display:flex;gap:8px;align-items:center" class="controls-row">
+          <button class="btn btn-ghost" id="shuffleBtn" title="Shuffle cards">Shuffle</button>
+          <button class="btn btn-ghost" id="resetBtn" title="Reset board">Reset</button>
+          <!-- NEW STOP/RESUME button -->
+          <button class="stop-btn" id="stopBtn" aria-pressed="false" aria-label="Pause game">Stop</button>
+          <button class="btn btn-ghost" id="muteBtn" title="Mute / Unmute">Mute</button>
+        </div>
+      </div>
+
+      <div id="gridWrap" style="position:relative;">
+        <div class="grid" id="grid" aria-live="polite" role="application" aria-label="Game board"></div>
+        <canvas class="confetti" id="confettiCanvas" style="display:none"></canvas>
+      </div>
+    </div>
+
+    <!-- right: stats -->
+    <div class="panel side">
+      <div class="stat-row">
+        <div class="stat">
+          <div class="label">Moves</div>
+          <div class="val" id="movesVal">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Time</div>
+          <div class="val" id="timeVal">00:00</div>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="label">Best Time</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="val" id="bestTime">—</div>
+          <div style="margin-left:auto" id="bestMeta" class="muted">—</div>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="label">Difficulty</div>
+        <div style="display:flex;gap:8px;margin-top:8px" class="controls mode-group" aria-hidden="false">
+          <!-- NEW: pill-mode buttons with aria-pressed -->
+          <button class="btn btn-ghost active" data-size="4" role="button" aria-pressed="true">4×4</button>
+          <button class="btn btn-ghost" data-size="6" role="button" aria-pressed="false">6×6</button>
+        </div>
+        <div class="footer-note muted">6×6 increases pairs and time required.</div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="label muted">Controls</div>
+        <div class="muted" style="margin-top:6px">Click/tap cards to flip. Press <strong>N</strong> to start a new game. Mute with the top button.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================
+   Adi's Ultimate Memory Match
+   Updated: added Stop/Resume button & pill-mode buttons (4x4/6x6)
+   Single-file: HTML/CSS/JS
+   ========================= */
+
+(() => {
+  // DOM refs
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const howBtn = document.getElementById('howBtn');
+  const gridEl = document.getElementById('grid');
+  const movesVal = document.getElementById('movesVal');
+  const timeVal = document.getElementById('timeVal');
+  const bestTimeEl = document.getElementById('bestTime');
+  const bestMeta = document.getElementById('bestMeta');
+  const muteBtn = document.getElementById('muteBtn');
+  const shuffleBtn = document.getElementById('shuffleBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const modeButtons = document.querySelectorAll('.mode-group button');
+  const winOverlay = document.getElementById('winOverlay');
+  const playAgainBtn = document.getElementById('playAgainBtn');
+  const closeWinBtn = document.getElementById('closeWinBtn');
+  const winStats = document.getElementById('winStats');
+  const bestBadge = document.getElementById('bestBadge');
+  const confettiCanvas = document.getElementById('confettiCanvas');
+  const stopBtn = document.getElementById('stopBtn');
+
+  // Settings & State
+  const STORAGE_KEY = 'adi_memory_best';
+  const SOUND_KEY = 'adi_memory_muted';
+  let gridSize = 4; // 4 => 4x4 ; 6 => 6x6
+  let cards = []; // array of items {id, symbol, matched, el}
+  let flipped = []; // indices
+  let moves = 0;
+  let timer = null;
+  let startTime = null;
+  let elapsed = 0;
+  let matchedCount = 0;
+  let muted = false;
+  let audioCtx = null;
+  let paused = false; // NEW: paused via Stop/Resume
+
+  // Sample symbol set (emojis)
+  const EMOJIS = ['🍉','🍋','🍇','🍓','🍒','🍍','🥝','🍑','🍊','🍐','🥥','🍈','🍌','🍏','🍅','🥕','🌽','🍆','🥑','🍄','🍞','🧀','🍪','🍩','🍫','🍬','🍭','🍯','🍗','🍖','🍤','🍣','🍙','🍚'];
+
+  // Audio helpers
+  function ensureAudio(){
+    if(muted) return;
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ audioCtx = null; }
+    }
+  }
+  function playTone(freq=440, type='sine', dur=0.12, vol=0.06){
+    if(muted) return;
+    ensureAudio();
+    if(!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    o.start(now);
+    g.gain.setValueAtTime(vol, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.stop(now + dur + 0.02);
+  }
+  function playFlip(){ playTone(740,'sine',0.08,0.03); }
+  function playMatch(){ playTone(520,'sine',0.22,0.06); setTimeout(()=>playTone(780,'sine',0.14,0.04), 80); }
+  function playWrong(){ playTone(180,'sawtooth',0.18,0.06); }
+  function playWin(){ playTone(420,'triangle',0.16,0.05); setTimeout(()=>playTone(680,'triangle',0.18,0.05),120); setTimeout(()=>playTone(980,'triangle',0.22,0.06),240); }
+
+  // Util: shuffle array
+  function shuffle(arr){
+    for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+    return arr;
+  }
+
+  // Timer
+  function startTimer(){ 
+    if(paused) return; // don't start while paused
+    if(timer) return;
+    startTime = Date.now() - elapsed*1000; 
+    timer = setInterval(()=>{ elapsed = Math.floor((Date.now()-startTime)/1000); timeVal.textContent = formatTime(elapsed); }, 250); 
+  }
+  function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+  function resetTimer(){ stopTimer(); elapsed=0; timeVal.textContent='00:00'; startTime=null; }
+
+  function formatTime(s){
+    const mm = String(Math.floor(s/60)).padStart(2,'0'), ss = String(s%60).padStart(2,'0'); return `${mm}:${ss}`;
+  }
+
+  // Build card data and render
+  function buildBoard(size){
+    gridSize = size;
+    const pairs = (size*size)/2;
+    // pick `pairs` emojis
+    const pick = shuffle(EMOJIS.slice()).slice(0,pairs);
+    // duplicate
+    const deck = shuffle([...pick, ...pick]);
+    cards = deck.map((sym, idx) => ({ id: idx, symbol: sym, matched:false, el:null }));
+    renderGrid();
+  }
+
+  function renderGrid(){
+    gridEl.innerHTML = '';
+    // columns adapt for desktop; mobile handled by CSS media query
+    if(gridSize === 6){
+      gridEl.style.gridTemplateColumns = `repeat(6, minmax(0,1fr))`;
+    } else {
+      gridEl.style.gridTemplateColumns = `repeat(4, minmax(0,1fr))`;
+    }
+
+    cards.forEach((card, idx) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'card';
+      wrap.setAttribute('data-index', idx);
+      wrap.setAttribute('role','button');
+      wrap.setAttribute('aria-label','card');
+      wrap.tabIndex = 0;
+
+      const inner = document.createElement('div');
+      inner.className = 'card-inner';
+
+      const faceBack = document.createElement('div');
+      faceBack.className = 'face back';
+      faceBack.innerHTML = '<span style="font-size:26px;font-weight:800">?</span>';
+
+      const faceFront = document.createElement('div');
+      faceFront.className = 'face front';
+      faceFront.textContent = card.symbol;
+
+      inner.appendChild(faceBack);
+      inner.appendChild(faceFront);
+      wrap.appendChild(inner);
+      gridEl.appendChild(wrap);
+
+      card.el = wrap;
+
+      // click handler
+      wrap.addEventListener('click', () => onCardClick(idx));
+      wrap.addEventListener('keydown', (e) => {
+        if((e.key === 'Enter' || e.key === ' ') && !paused) { e.preventDefault(); onCardClick(idx); }
+      });
+    });
+
+    // reset UI state
+    flipped = [];
+    moves = 0; matchedCount = 0;
+    movesVal.textContent = moves;
+    resetTimer();
+    winOverlay.style.display = 'none';
+    confettiCanvas.style.display = 'none';
+    bestBadge.style.display = 'none';
+
+    // if paused, ensure clicks are disabled visually (cards still rendered)
+    updateCardInteractivity();
+  }
+
+  function onCardClick(index){
+    if(paused) return;
+    const c = cards[index];
+    if(!c || c.matched) return;
+    // prevent flip if two are open already
+    if(flipped.length === 2) return;
+    // if already flipped
+    if(flipped.includes(index)) return;
+
+    // start timer on first move
+    if(moves === 0 && flipped.length === 0 && !timer){
+      startTimer();
+    }
+
+    // flip visual
+    flipCard(index);
+    flipped.push(index);
+    playFlip();
+
+    if(flipped.length === 2){
+      moves++;
+      movesVal.textContent = moves;
+      const [a,b] = flipped;
+      const ca = cards[a], cb = cards[b];
+      if(ca.symbol === cb.symbol){
+        // match
+        ca.matched = cb.matched = true;
+        // give matched class & pulse
+        ca.el.classList.add('matched'); cb.el.classList.add('matched');
+        addPulse(ca.el); addPulse(cb.el);
+        playMatch();
+        matchedCount += 2;
+        flipped = [];
+        // check win
+        if(matchedCount === cards.length){
+          onWin();
+        }
+      } else {
+        // wrong -> flip back after short delay
+        playWrong();
+        setTimeout(()=>{
+          unflipCard(a); unflipCard(b);
+          flipped = [];
+        }, 750);
+      }
+    }
+  }
+
+  function flipCard(idx){
+    const el = cards[idx].el;
+    if(!el) return;
+    el.classList.add('flipped');
+  }
+  function unflipCard(idx){
+    const el = cards[idx].el;
+    if(!el) return;
+    el.classList.remove('flipped');
+  }
+
+  function addPulse(el){
+    const p = document.createElement('div'); p.className = 'pulse';
+    el.appendChild(p);
+    setTimeout(()=>{ if(p && p.parentNode) p.parentNode.removeChild(p); }, 1000);
+  }
+
+  // Win handling
+  function onWin(){
+    stopTimer();
+    playWin();
+    // show overlay with stats
+    winOverlay.style.display = 'grid';
+    const timeText = formatTime(elapsed);
+    winStats.textContent = `Time: ${timeText} • Moves: ${moves}`;
+    // check best
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const best = raw ? JSON.parse(raw) : null;
+      let isBest = false;
+      if(!best || elapsed < best.time || (elapsed === best.time && moves < best.moves)){
+        // store
+        const record = { time: elapsed, moves: moves, when: new Date().toISOString(), size: gridSize };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+        isBest = true;
+      }
+      updateBestDisplay();
+      if(isBest){
+        bestBadge.style.display = 'inline-block';
+      }
+    }catch(e){}
+    // run confetti
+    runConfetti();
+  }
+
+  function updateBestDisplay(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){ bestTimeEl.textContent = '—'; bestMeta.textContent = '—'; return; }
+      const best = JSON.parse(raw);
+      bestTimeEl.textContent = formatTime(best.time);
+      const d = new Date(best.when);
+      bestMeta.textContent = `${best.moves} moves • ${d.toLocaleDateString()}`;
+    }catch(e){}
+  }
+
+  // Controls
+  function attachControls(){
+    startBtn.addEventListener('click', () => {
+      startOverlay.style.display = 'none';
+      startOverlay.setAttribute('aria-hidden','true');
+      buildBoard(gridSize);
+    });
+    howBtn.addEventListener('click', ()=> alert('Flip two cards to find matching pairs. Match all pairs to win. Use N key to start a new game.'));
+
+    shuffleBtn.addEventListener('click', () => {
+      // shuffle symbols and re-render preserving matched cleared
+      const symbols = cards.map(c => c.symbol);
+      shuffle(symbols);
+      cards.forEach((c,i)=> { c.symbol = symbols[i]; if(c.el) c.el.querySelector('.face.front').textContent = c.symbol; c.matched=false; c.el.classList.remove('matched'); c.el.classList.remove('flipped'); });
+      flipped = []; moves = 0; movesVal.textContent = moves; resetTimer();
+      updateBestDisplay();
+      // keep paused state
+      updateCardInteractivity();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      buildBoard(gridSize);
+      // keep paused state
+      updateCardInteractivity();
+    });
+
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+      localStorage.setItem(SOUND_KEY, muted ? '1' : '0');
+      if(!muted) ensureAudio();
+    });
+
+    // Mode buttons (pill-style) - use setMode to centralize logic
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const size = parseInt(btn.getAttribute('data-size'));
+        setMode(size);
+      });
+      // keyboard support
+      btn.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){
+          e.preventDefault();
+          const size = parseInt(btn.getAttribute('data-size'));
+          setMode(size);
+        }
+      });
+    });
+
+    playAgainBtn.addEventListener('click', ()=>{
+      winOverlay.style.display = 'none';
+      buildBoard(gridSize);
+    });
+    closeWinBtn.addEventListener('click', ()=> winOverlay.style.display = 'none');
+
+    // NEW: stop/resume logic
+    stopBtn.addEventListener('click', ()=>{
+      if(!paused){
+        // pause
+        paused = true;
+        stopTimer();
+        stopBtn.classList.add('paused');
+        stopBtn.textContent = 'Resume';
+        stopBtn.setAttribute('aria-pressed','true');
+      } else {
+        // resume
+        paused = false;
+        stopBtn.classList.remove('paused');
+        stopBtn.textContent = 'Stop';
+        stopBtn.setAttribute('aria-pressed','false');
+        // restart timer only if the game had started before
+        if(startTime !== null || (moves>0 || elapsed>0)){
+          startTimer();
+        }
+      }
+      updateCardInteractivity();
+    });
+
+    // keyboard shortcuts
+    document.addEventListener('keydown', (e)=> {
+      if(e.key.toLowerCase() === 'n'){
+        startOverlay.style.display = 'none';
+        buildBoard(gridSize);
+      }
+      if(e.key.toLowerCase() === 'm'){ muted = !muted; muteBtn.textContent = muted ? 'Unmute' : 'Mute'; localStorage.setItem(SOUND_KEY, muted ? '1':'0'); }
+    });
+  }
+
+  // NEW: setMode central function
+  function setMode(size){
+    // guard: do nothing if same
+    if(size === gridSize) return;
+    // temporarily disable interactions while rebuilding
+    const prevPaused = paused;
+    // rebuild board with new size
+    // keep paused state same as before
+    gridSize = size;
+    // update button active states
+    modeButtons.forEach(b => {
+      const s = parseInt(b.getAttribute('data-size'));
+      const active = s === size;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    // rebuild grid and maintain paused
+    buildBoard(gridSize);
+    paused = prevPaused;
+    updateCardInteractivity();
+  }
+
+  // NEW: disables/enables card clicks and visually indicates paused state
+  function updateCardInteractivity(){
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach(c => {
+      if(paused){
+        c.style.pointerEvents = 'none';
+        c.setAttribute('aria-disabled','true');
+        c.style.opacity = '0.9';
+      } else {
+        c.style.pointerEvents = '';
+        c.removeAttribute('aria-disabled');
+        c.style.opacity = '';
+      }
+    });
+    // update stop button appearance handled in click handler
+  }
+
+  // Confetti (simple)
+  function runConfetti(){
+    try{
+      confettiCanvas.style.display = 'block';
+      confettiCanvas.width = confettiCanvas.clientWidth || confettiCanvas.offsetWidth || window.innerWidth;
+      confettiCanvas.height = confettiCanvas.clientHeight || confettiCanvas.offsetHeight || window.innerHeight;
+      const ctx = confettiCanvas.getContext('2d');
+      const pieces = [];
+      const colors = ['#38bdf8','#a855f7','#f472b6','#fb7185','#f59e0b','#34d399'];
+      for(let i=0;i<120;i++){
+        pieces.push({
+          x: Math.random()*confettiCanvas.width,
+          y: Math.random()*confettiCanvas.height - confettiCanvas.height,
+          size: (2+Math.random()*8),
+          speed: (1+Math.random()*6),
+          swing: (Math.random()*2-1),
+          color: colors[Math.floor(Math.random()*colors.length)],
+          rot: Math.random()*360,
+          rotSpeed: (Math.random()*6-3)
+        });
+      }
+      let t=0;
+      function frame(){
+        t++;
+        ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+        for(const p of pieces){
+          p.y += p.speed;
+          p.x += Math.sin((p.y/20))*p.swing;
+          p.rot += p.rotSpeed;
+          ctx.save();
+          ctx.translate(p.x,p.y);
+          ctx.rotate(p.rot*Math.PI/180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+          ctx.restore();
+        }
+        if(t < 160) requestAnimationFrame(frame);
+        else { confettiCanvas.style.display='none'; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+      }
+      requestAnimationFrame(frame);
+    }catch(e){}
+  }
+
+  // Init load saved settings
+  function init(){
+    // load muted
+    try{
+      const s = localStorage.getItem(SOUND_KEY);
+      muted = s === '1';
+      muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+    }catch(e){}
+    updateBestDisplay();
+    attachControls();
+
+    // default build not until Start pressed; show overlay
+    // but allow quick start if user presses N
+    document.addEventListener('keydown', (e)=> {
+      if(e.key.toLowerCase() === 'n'){
+        startOverlay.style.display = 'none';
+        buildBoard(gridSize);
+      }
+    });
+
+    // accessibility: focus start button initially
+    startBtn.focus();
+  }
+
+  // Start
+  init();
+
+})();
+</script>
+</body>
+</html>
